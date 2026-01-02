@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/staff.css">
+<title>Staff Dashboard</title>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="brandname">
+    <div class="logo">
+      <img src="/logo.png" alt="Logo" class="logo-img">
+    </div>
+    <h2>G'ray Countryside Cafe Est.2018</h2>
+  </div>
+  <div class="logout-container">
+    <a href="/logout"><button>Logout</button></a>
+  </div>
+</nav>
+
+<!-- DASHBOARD -->
+<div class="staffdashboard">
+  <div class="dashboard">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <h2>Categories</h2>
+
+      <button class="category-btn" data-category="all">All</button><br>
+      <button class="category-btn" data-category="Rice Bowl Meal">Rice Bowl Meal</button><br>
+      <button class="category-btn" data-category="Hot Sizzlers with Rice & Gravy">Hot Sizzlers with Rice & Gravy</button><br>
+      <button class="category-btn" data-category="Party Tray">Party Tray</button><br>
+      <button class="category-btn" data-category="Drinks">Drinks</button><br>
+      <button class="category-btn" data-category="Coffee & Tea">Coffee & Tea</button><br>
+      <button class="category-btn" data-category="Milk Tea">Milk Tea</button><br>
+      <button class="category-btn" data-category="Frappe">Frappe</button><br>
+
+
+      <% categories.forEach(c => { %>
+        <button class="category-btn" data-category="<%= c.name %>"><%= c.name %></button>
+      <% }) %>
+
+      <footer>&copy; 2026 For School Purposes Only. All rights reserved.</footer>
+    </div>
+
+    <!-- CENTER -->
+    <div class="center">
+      <input type="text" class="search" placeholder="Search Menu" onkeyup="searchFood(this.value)">
+
+  <button onclick="RiceBowlMeal('Pork Chop', 150)"><h5>Pork Chop</h5></button>
+  <button onclick="RiceBowlMeal('Lechon Kawali', 180)"><h5>Lechon Kawali</h5></button>
+  <button onclick="RiceBowlMeal('Adobong Manok', 160)"><h5>Adobong Manok</h5></button>
+
+      <!-- Menu container for dynamic buttons -->
+      <div id="menuContainer" class="menu-grid"></div>
+    </div>
+
+    <!-- CART -->
+    <div class="cart">
+      <h3>Bills</h3>
+      <ul id="cartList"></ul>
+
+      <div class="totals">
+        <p>Subtotal: ₱<span id="subtotal">0.00</span></p>
+        <p>Tax (10%): ₱<span id="tax">0.00</span></p>
+        <h3>Total Cash: ₱<span id="total">0.00</span></h3>
+        <button onclick="DineIn()">Dine In</button>
+        <button onclick="Takeout()">Take Out</button>
+        <button onclick="printReceipt()">Print Receipt</button>
+      </div>
+
+      <button class="pay-btn" onclick="charge()">Pay</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ============================
+   GLOBAL STATE VARIABLES
+============================ */
+let cart = [];
+let orderType = "Dine In";
+
+/* ============================
+   PRODUCTS (FROM SERVER)
+============================ */
+
+  const allProducts = <%- JSON.stringify(locals.products || []) %>;
+
+
+/* ============================
+   CART FUNCTIONS
+============================ */
+function addToCart(name, price) {
+  const item = cart.find(i => i.name === name);
+  if (item) item.qty++;
+  else cart.push({ name, price, qty: 1 });
+  renderCart();
+}
+
+function removeItem(index) {
+  if (cart[index].qty > 1) cart[index].qty--;
+  else cart.splice(index, 1);
+  renderCart();
+}
+
+function renderCart() {
+  const list = document.getElementById("cartList");
+  list.innerHTML = "";
+
+  let subtotal = 0;
+  cart.forEach((item, index) => {
+    subtotal += item.price * item.qty;
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${item.name} x${item.qty}</span> <span>₱${(item.price * item.qty).toFixed(2)}</span>`;
+    li.onclick = () => removeItem(index);
+    list.appendChild(li);
+  });
+
+  const tax = subtotal * 0.10;
+  document.getElementById("subtotal").textContent = subtotal.toFixed(2);
+  document.getElementById("tax").textContent = tax.toFixed(2);
+  document.getElementById("total").textContent = (subtotal + tax).toFixed(2);
+}
+
+/* ============================
+   ORDER TYPE
+============================ */
+function DineIn() { orderType = "Dine In"; alert("Order set to Dine In"); }
+function Takeout() { orderType = "Take Out"; alert("Order set to Take Out"); }
+
+/* ============================
+   STOCK CONTROL
+============================ */
+function changeStock(button, delta) {
+  const stockSpan = button.parentElement.querySelector(".stock-number");
+  let stock = parseInt(stockSpan.dataset.stock);
+  stock = Math.max(stock + delta, 0);
+  stockSpan.dataset.stock = stock;
+  stockSpan.textContent = stock;
+}
+
+/* ============================
+   MENU FILTER & SEARCH
+============================ */
+function filterCategory(category) {
+  const container = document.getElementById("menuContainer");
+  container.innerHTML = ""; // clear previous items
+
+  const filtered = category === "all"
+    ? allProducts
+    : allProducts.filter(p => p.category === category);
+
+  filtered.forEach(item => {
+    const btn = document.createElement("button");
+    btn.onclick = () => RiceBowlMeal(item.name, item.price);
+    btn.innerHTML = `<h5>${item.name} - ₱${item.price.toFixed(2)}</h5>`;
+    container.appendChild(btn);
+  });
+}
+
+function searchFood(value) {
+  value = value.toLowerCase();
+  document.querySelectorAll("#menuContainer button").forEach(btn => {
+    btn.style.display = btn.textContent.toLowerCase().includes(value) ? "block" : "none";
+  });
+}
+
+/* ============================
+   PAYMENT
+============================ */
+function charge() {
+  if (!cart.length) { alert("Cart is empty!"); return; }
+
+  const orderItems = cart.map(item => ({ name: item.name, price: item.price, qty: item.qty }));
+  const total = parseFloat(document.getElementById("total").textContent);
+
+  fetch("/api/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: orderItems, total, type: orderType })
+  })
+  .then(res => res.json())
+  .then(() => { alert("Payment successful!"); cart = []; renderCart(); })
+  .catch(err => { console.error(err); alert("Failed to save order."); });
+}
+
+/* ============================
+   PRINT RECEIPT
+============================ */
+function printReceipt() {
+  if (!cart.length) { alert("Cart is empty!"); return; }
+  const tbody = document.getElementById("r-items");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  let subtotal = 0;
+  cart.forEach(item => {
+    subtotal += item.price * item.qty;
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${item.name}</td><td>${item.qty}</td><td>₱${(item.price*item.qty).toFixed(2)}</td>`;
+    tbody.appendChild(row);
+  });
+  const tax = subtotal*0.10;
+  const total = subtotal+tax;
+  document.getElementById("r-subtotal").textContent = subtotal.toFixed(2);
+  document.getElementById("r-tax").textContent = tax.toFixed(2);
+  document.getElementById("r-total").textContent = total.toFixed(2);
+  const typeEl = document.getElementById("r-type");
+  if (typeEl) typeEl.textContent = orderType;
+  window.print();
+}
+
+/* ============================
+   MENU BUTTON CLICK → ADD TO CART
+============================ */
+function RiceBowlMeal(name, price) {
+  addToCart(name, price);
+  document.querySelector('.cart').scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ============================
+   INITIALIZATION
+============================ */
+document.addEventListener("DOMContentLoaded", () => {
+  filterCategory('all'); // default
+
+  // Category buttons
+  document.querySelectorAll(".category-btn").forEach(btn => {
+    btn.addEventListener("click", () => filterCategory(btn.dataset.category));
+  });
+});
+</script>
+
+</body>
+</html>
